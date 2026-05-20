@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EDI Reader — Convert EDI, JSON & XML to PDF</title>
+<link rel="stylesheet" href="styles.css?v=17" />
+<script>
+  // Apply saved theme + palette before paint to avoid FOUC.
+  (function() {
+    try {
+      var saved = localStorage.getItem('edireader-theme');
+      if (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) saved = 'lavender';
+      if (!saved) return;
+      var root = document.documentElement;
+      if (saved === 'dark') { root.dataset.theme = 'dark'; }
+      else { root.dataset.theme = 'light'; root.dataset.palette = saved; }
+    } catch (e) {}
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+  <div class="aurora">
+    <div class="aurora-blob blob-1"></div>
+    <div class="aurora-blob blob-2"></div>
+    <div class="aurora-blob blob-3"></div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
+          <defs>
+            <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#7c5cff"/>
+              <stop offset="100%" stop-color="#22d3ee"/>
+            </linearGradient>
+          </defs>
+          <rect x="3" y="3" width="26" height="26" rx="7" fill="url(#lg)"/>
+          <path d="M9 11h14M9 16h10M9 21h14" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>EDI Reader</h1>
+        <span class="tagline">Transform EDI to JSON, XML or human readable PDFs</span>
+      </div>
+    </div>
+    <nav class="topbar-actions">
+      <button class="btn btn-ghost" id="loadSample">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Sample
+      </button>
+      <button class="btn btn-ghost" id="clearAll">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg>
+        Clear
+      </button>
+      <button class="btn btn-ghost btn-icon" id="themeToggle" title="Toggle theme" aria-label="Toggle theme">
+        <svg class="icon-dark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-light" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+      <button class="btn btn-ghost" id="aboutBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        About
+      </button>
+    </nav>
+  </header>
+
+  <main class="workspace">
+    <!-- INPUT PANEL -->
+    <section class="panel panel-input">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span class="dot dot-input"></span>
+          <h2>Input</h2>
+          <span class="badge" id="detectedFormat">Auto-detect</span>
+        </div>
+        <div class="panel-controls">
+          <label class="select-wrap">
+            <span class="select-label">Format</span>
+            <select id="inputFormat">
+              <option value="auto">Auto-detect</option>
+              <option value="x12">EDI · X12</option>
+              <option value="edifact">EDI · EDIFACT</option>
+            </select>
+          </label>
+          <label class="btn btn-ghost btn-icon" title="Upload file">
+            <input type="file" id="fileInput" accept=".edi,.txt,.x12,.dat,.ifx,.edifact" hidden />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload
+          </label>
+        </div>
+      </div>
+
+      <div class="drop-zone" id="dropZone">
+        <textarea
+          id="inputArea"
+          spellcheck="false"
+          placeholder="Paste your EDI document here — or drag & drop a file.&#10;&#10;Supported standards:&#10;  • X12 (starts with ISA*00*...)&#10;  • EDIFACT (starts with UNA:+.? or UNB+...)&#10;&#10;Output: JSON, XML, or a human-readable PDF business document."
+        ></textarea>
+        <div class="drop-overlay" id="dropOverlay">
+          <div class="drop-overlay-inner">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <p>Drop your file to load</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-footer">
+        <div class="stats">
+          <span><strong id="charCount">0</strong> chars</span>
+          <span><strong id="lineCount">0</strong> lines</span>
+          <span><strong id="segCount">0</strong> segments</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACTION RAIL -->
+    <section class="rail">
+      <div class="rail-card">
+        <h3>Convert</h3>
+        <div class="rail-options">
+          <label class="select-wrap">
+            <span class="select-label">Output</span>
+            <select id="outputFormat">
+              <option value="readable">Human Readable</option>
+              <option value="json">JSON</option>
+              <option value="xml">XML</option>
+            </select>
+          </label>
+          <label class="checkbox-row" id="rowPretty">
+            <input type="checkbox" id="optPretty" checked />
+            <span>Pretty print</span>
+            <small class="opt-hint">(JSON / XML)</small>
+          </label>
+          <label class="checkbox-row" id="rowLabels">
+            <input type="checkbox" id="optLabels" checked />
+            <span>Annotate with EDI names</span>
+            <small class="opt-hint">Adds human-readable labels for each segment & element in JSON / XML output.</small>
+          </label>
+          <label class="checkbox-row" id="rowAudit">
+            <input type="checkbox" id="optAudit" />
+            <span>Append technical EDI details</span>
+            <small class="opt-hint">Adds a raw segment-by-segment appendix after the business document.</small>
+          </label>
+        </div>
+        <button class="btn btn-primary btn-block" id="convertBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          Convert
+        </button>
+        <button class="btn btn-secondary btn-block" id="downloadPdfBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download PDF
+        </button>
+        <button class="btn btn-ghost btn-block" id="downloadTextBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Download Output
+        </button>
+      </div>
+
+      <div class="rail-card">
+        <h3>Document Info</h3>
+        <dl class="info-list" id="docInfo">
+          <div><dt>Standard</dt><dd id="infoStandard">—</dd></div>
+          <div><dt>Transaction</dt><dd id="infoTransaction">—</dd></div>
+          <div><dt>Sender</dt><dd id="infoSender">—</dd></div>
+          <div><dt>Receiver</dt><dd id="infoReceiver">—</dd></div>
+          <div><dt>Control #</dt><dd id="infoControl">—</dd></div>
+          <div><dt>Date</dt><dd id="infoDate">—</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <!-- OUTPUT PANEL -->
+    <section class="panel panel-output">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span class="dot dot-output"></span>
+          <h2>Preview</h2>
+          <span class="badge" id="outputBadge">No output yet</span>
+        </div>
+        <div class="panel-controls">
+          <div class="view-toggle">
+            <button class="view-btn active" data-view="rich" id="viewRich">Rich</button>
+            <button class="view-btn" data-view="code" id="viewCode">Code</button>
+          </div>
+          <button class="btn btn-ghost btn-icon" id="copyBtn" title="Copy output">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="output-stage">
+        <div class="output-view view-rich" id="richView">
+          <div class="empty-state">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            <h3>Ready when you are</h3>
+            <p>Paste, drop, or upload a file — then click <strong>Convert</strong>.</p>
+            <button class="btn btn-ghost" id="emptyLoadSample">Try a sample document</button>
+          </div>
+        </div>
+        <pre class="output-view view-code hidden" id="codeView"><code id="codeBlock"></code></pre>
+      </div>
+
+      <div class="panel-footer">
+        <div class="status" id="status">Idle</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- About modal -->
+  <div class="modal hidden" id="aboutModal" role="dialog" aria-modal="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card">
+      <header>
+        <h2>About EDI Reader</h2>
+        <button class="btn btn-ghost btn-icon" data-close aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </header>
+      <div class="modal-body">
+        <p>EDI Reader is a fully <strong>client-side</strong> tool — your data never leaves your browser. It transforms EDI documents (X12 and EDIFACT) into JSON, XML, or human-readable business PDFs.</p>
+        <h3>Supported transactions</h3>
+        <ul class="chip-list">
+          <li>X12 810 · Invoice</li>
+          <li>X12 850 · Purchase Order</li>
+          <li>X12 855 · PO Ack</li>
+          <li>X12 856 · Ship Notice</li>
+          <li>X12 940 · Warehouse Ship</li>
+          <li>X12 945 · Warehouse Confirmation</li>
+          <li>X12 997 · Functional Ack</li>
+          <li>EDIFACT INVOIC · ORDERS · DESADV</li>
+        </ul>
+        <h3>Sample sources</h3>
+        <p>Use the <strong>Sample</strong> button to load demo documents for any supported format.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-stack" id="toasts"></div>
+
+  <script src="edi-dictionary.js?v=17"></script>
+  <script src="edi-parser.js?v=17"></script>
+  <script src="format-utils.js?v=17"></script>
+  <script src="business-mapper.js?v=17"></script>
+  <script src="pdf-generator.js?v=17"></script>
+  <script src="samples.js?v=17"></script>
+  <script src="app.js?v=17"></script>
+</body>
+</html>

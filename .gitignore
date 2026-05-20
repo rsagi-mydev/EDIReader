@@ -1,0 +1,14 @@
+# Claude Code workspace settings (local only)
+.claude/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor settings
+.vscode/
+.idea/
+
+# Logs
+*.log
